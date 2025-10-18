@@ -8,44 +8,46 @@ const User = require("../models/user");
  * Class to hold the business logic for the auth service interacting with the user repository
  */
 class AuthService {
-  constructor() {
-    this.userRepository = new UserRepository();
-  }
+    constructor() {
+        this.userRepository = new UserRepository();
+    }
+    async findUserByUsername(username) {
+        const user = await User.findOne({ username });
+        return user;
+    }
+    async getUserById(userId) {
+        const user = await this.userRepository.getUserById(userId);
+        return user;
+    }
+    async login(username, password) {
+        const user = await this.userRepository.getUserByUsername(username);
 
-  async findUserByUsername(username) {
-    const user = await User.findOne({ username });
-    return user;
-  }
+        if (!user) {
+            return { success: false, message: "Invalid username or password" };
+        }
 
-  async login(username, password) {
-    const user = await this.userRepository.getUserByUsername(username);
+        const isMatch = await bcrypt.compare(password, user.password);
 
-    if (!user) {
-      return { success: false, message: "Invalid username or password" };
+        if (!isMatch) {
+            return { success: false, message: "Invalid username or password" };
+        }
+
+        const token = jwt.sign({ id: user._id }, config.jwtSecret);
+
+        return { success: true, token };
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    async register(user) {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(user.password, salt);
 
-    if (!isMatch) {
-      return { success: false, message: "Invalid username or password" };
+        return await this.userRepository.createUser(user);
     }
 
-    const token = jwt.sign({ id: user._id }, config.jwtSecret);
-
-    return { success: true, token };
-  }
-
-  async register(user) {
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(user.password, salt);
-
-    return await this.userRepository.createUser(user);
-  }
-
-  async deleteTestUsers() {
-    // Delete all users with a username that starts with "test"
-    await User.deleteMany({ username: /^test/ });
-  }
+    async deleteTestUsers() {
+        // Delete all users with a username that starts with "test"
+        await User.deleteMany({ username: /^test/ });
+    }
 }
 
 module.exports = AuthService;
