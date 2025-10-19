@@ -73,10 +73,10 @@ jobs:
     steps:
       - name: Pull latest Docker images
         run: |
-          docker pull $env:DOCKER_USERNAME/api-gateway:latest
-          docker pull $env:DOCKER_USERNAME/auth:latest
-          docker pull $env:DOCKER_USERNAME/product:latest
-          docker pull $env:DOCKER_USERNAME/order:latest
+          docker pull nct2903/api-gateway:latest
+          docker pull nct2903/auth:latest
+          docker pull nct2903/product:latest
+          docker pull nct2903/order:latest
 
       - name: Run docker-compose
         run: |
