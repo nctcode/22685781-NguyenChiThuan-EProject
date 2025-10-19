@@ -36,7 +36,7 @@ services:
     container_name: order
     ports:
       - "3002:3002"
-    environment:  # THÊM VÀO ĐÂY - QUAN TRỌNG!
+    environment:
       - RABBITMQ_URI=amqp://guest:guest@rabbitmq:5672
       - MONGODB_ORDER_URI=mongodb://mongodb:27017/order-service
     env_file: ./order/.env
