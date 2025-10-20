@@ -1,8 +1,6 @@
 const Product = require("../models/product");
 const messageBroker = require("../utils/messageBroker");
 const uuid = require('uuid');
-const ProductService = require("../services/productService");
-
 /**
  * Class to hold the API implementation for the product services
  */
@@ -11,7 +9,6 @@ class ProductController {
     constructor() {
         this.createOrder = this.createOrder.bind(this);
         this.getOrderStatus = this.getOrderStatus.bind(this);
-        this.productService = new ProductService();
         this.ordersMap = new Map();
 
     }
