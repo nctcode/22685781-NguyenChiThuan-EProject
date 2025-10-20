@@ -56,9 +56,9 @@ jobs:
     steps:
       # 1️⃣ Kiểm tra Docker environment
       - name: Check Docker environment
-        shell: pwsh
+        shell: cmd
         run: |
-          Write-Host "Checking Docker environment..."
+          echo Checking Docker environment...
           docker --version
           docker-compose --version
 
@@ -71,40 +71,35 @@ jobs:
 
       # 3️⃣ Dừng và xóa containers cũ
       - name: Stop and remove old containers
-        shell: pwsh
+        shell: cmd
         run: |
-          Write-Host "Stopping old containers..."
-          cd "D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1"
-          try {
-            docker-compose down --remove-orphans
-          } catch {
-            Write-Host "No containers to stop"
-          }
+          echo Stopping old containers...
+          cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
+          docker-compose down --remove-orphans
 
       # 4️⃣ Pull images mới nhất
       - name: Pull latest Docker images
-        shell: pwsh
+        shell: cmd
         run: |
-          Write-Host "Pulling latest Docker images..."
-          $images = @("api-gateway","auth","product","order")
-          foreach ($img in $images) {
-            docker pull "${{ secrets.DOCKER_USERNAME }}/$img:latest"
-          }
-          Write-Host "All images pulled successfully"
+          echo Pulling latest Docker images...
+          docker pull %DOCKER_USERNAME%/api-gateway:latest
+          docker pull %DOCKER_USERNAME%/auth:latest
+          docker pull %DOCKER_USERNAME%/product:latest
+          docker pull %DOCKER_USERNAME%/order:latest
 
       # 5️⃣ Deploy với docker-compose
       - name: Deploy with docker-compose
-        shell: pwsh
+        shell: cmd
         run: |
-          Write-Host "Deploying services..."
-          cd "D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1"
+          echo Deploying services...
+          cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
           docker-compose up -d --remove-orphans --force-recreate
-          Write-Host "Deployment completed"
+          echo Deployment completed
 
       # 6️⃣ Thông báo deployment hoàn tất
       - name: Deployment summary
-        shell: pwsh
+        shell: cmd
         run: |
-          Write-Host "DEPLOYMENT COMPLETED SUCCESSFULLY!"
-          Write-Host "Services currently running:"
-          docker ps --format "• {{.Names}} ({{.Status}})"
+          echo DEPLOYMENT COMPLETED SUCCESSFULLY!
+          docker ps
+
