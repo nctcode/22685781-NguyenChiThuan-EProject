@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   api-gateway:
-    image: nct2903/api-gateway:latest  # ← Thêm dòng này
+    image: nct2903/api-gateway:latest 
     build: ./api-gateway
     container_name: api-gateway
     ports:
@@ -26,7 +26,7 @@ services:
       start_period: 40s
 
   auth:
-    image: nct2903/auth:latest  # ← Thêm dòng này
+    image: nct2903/auth:latest
     build: ./auth
     container_name: auth
     ports:
@@ -45,7 +45,7 @@ services:
       start_period: 40s
 
   product:
-    image: nct2903/product:latest  # ← Thêm dòng này
+    image: nct2903/product:latest
     build: ./product
     container_name: product
     ports:
@@ -66,7 +66,7 @@ services:
       start_period: 40s
 
   order:
-    image: nct2903/order:latest  # ← Thêm dòng này
+    image: nct2903/order:latest 
     build: ./order
     container_name: order
     ports:
