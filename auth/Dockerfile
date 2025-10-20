@@ -15,3 +15,6 @@ COPY . .
 
 # Set the command to start the app
 CMD [ "npm", "start" ]
+
+# Expose cổng 3004
+EXPOSE 3004
