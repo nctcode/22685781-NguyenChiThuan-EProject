@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-and-push:
-    name: 🧱 Build & Push Docker Images
+    name: Build & Push Docker Images
     runs-on: ubuntu-latest
 
     steps:
@@ -74,15 +74,15 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
-    name: 🚀 Deploy on Localhost (Windows Runner)
+    name: Deploy on Localhost (Windows Runner)
     needs: build-and-push
     runs-on: self-hosted
 
     steps:
-      # 1️⃣ Kiểm tra Docker environment
+      # 1️⃣ Kiểm tra Docker environment (PowerShell compatible)
       - name: Check Docker environment
         run: |
-          echo "🔍 Checking Docker environment..."
+          Write-Host "Checking Docker environment..."
           docker --version
           docker-compose --version
           docker ps
@@ -91,7 +91,7 @@ jobs:
       - name: Login to Docker Hub on Windows
         run: |
           docker login -u $env:DOCKER_USERNAME -p $env:DOCKER_PASSWORD
-          echo "✅ Logged in to Docker Hub successfully"
+          Write-Host "Logged in to Docker Hub successfully"
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
@@ -99,77 +99,82 @@ jobs:
       # 3️⃣ Dừng và xóa containers cũ
       - name: Stop and remove old containers
         run: |
-          echo "🛑 Stopping old containers..."
+          Write-Host "Stopping old containers..."
           cd "D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1"
-          docker-compose down --remove-orphans --volumes || echo "No containers to stop"
+          docker-compose down --remove-orphans || Write-Host "No containers to stop"
 
       # 4️⃣ Pull images mới nhất từ Docker Hub
       - name: Pull latest Docker images
         run: |
-          echo "📥 Pulling latest Docker images..."
-          docker pull ${{ secrets.DOCKER_USERNAME }}/api-gateway:latest || echo "⚠️ Failed to pull api-gateway"
-          docker pull ${{ secrets.DOCKER_USERNAME }}/auth:latest || echo "⚠️ Failed to pull auth"
-          docker pull ${{ secrets.DOCKER_USERNAME }}/product:latest || echo "⚠️ Failed to pull product"
-          docker pull ${{ secrets.DOCKER_USERNAME }}/order:latest || echo "⚠️ Failed to pull order"
-          echo "✅ All images pulled successfully"
+          Write-Host "Pulling latest Docker images..."
+          docker pull ${{ secrets.DOCKER_USERNAME }}/api-gateway:latest || Write-Host "Failed to pull api-gateway"
+          docker pull ${{ secrets.DOCKER_USERNAME }}/auth:latest || Write-Host "Failed to pull auth"
+          docker pull ${{ secrets.DOCKER_USERNAME }}/product:latest || Write-Host "Failed to pull product"
+          docker pull ${{ secrets.DOCKER_USERNAME }}/order:latest || Write-Host "Failed to pull order"
+          Write-Host "All images pulled successfully"
 
-      # 5️⃣ Deploy với docker-compose (sử dụng images mới nhất)
+      # 5️⃣ Deploy với docker-compose
       - name: Deploy with docker-compose
         run: |
-          echo "🚀 Deploying with docker-compose..."
+          Write-Host "Deploying with docker-compose..."
           cd "D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1"
           docker-compose up -d --remove-orphans --force-recreate
-          echo "✅ Deployment completed"
+          Write-Host "Deployment completed"
 
       # 6️⃣ Kiểm tra trạng thái deployment
       - name: Verify deployment status
         run: |
-          echo "📊 Deployment Status:"
-          echo "======================"
+          Write-Host "Deployment Status:"
+          Write-Host "======================"
           docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-          echo "======================"
+          Write-Host "======================"
           
           # Kiểm tra các containers đang chạy
-          running_containers=$(docker ps --format "{{.Names}}" | wc -l)
-          echo "📈 Running containers: $running_containers"
+          $running_containers = docker ps --format "{{.Names}}" | Measure-Object -Line
+          Write-Host "Running containers: $($running_containers.Lines)"
           
-          if [ $running_containers -gt 0 ]; then
-            echo "✅ Deployment successful - $running_containers containers are running"
-          else
-            echo "❌ Deployment failed - No containers running"
+          if ($running_containers.Lines -gt 0) {
+            Write-Host "Deployment successful - $($running_containers.Lines) containers are running"
+          } else {
+            Write-Host "Deployment failed - No containers running"
             exit 1
-          fi
+          }
 
-      # 7️⃣ Kiểm tra health của services (sau 30 giây)
+      # 7️⃣ Kiểm tra health của services (PowerShell version)
       - name: Check services health
         run: |
-          echo "🏥 Checking services health..."
-          timeout 90 bash -c '
-            while true; do
-              healthy_count=$(docker ps --filter "health=healthy" --format "{{.Names}}" | wc -l)
-              if [ $healthy_count -gt 0 ]; then
-                echo "✅ $healthy_count services are healthy"
-                break
-              else
-                echo "⏳ Waiting for services to become healthy..."
-                sleep 10
-              fi
-            done
-          ' || echo "⚠️ Some services may not have health checks"
+          Write-Host "Checking services health..."
+          $timeout = 90
+          $startTime = Get-Date
+          
+          while (((Get-Date) - $startTime).TotalSeconds -lt $timeout) {
+            $healthyCount = docker ps --filter "health=healthy" --format "{{.Names}}" | Measure-Object -Line
+            if ($healthyCount.Lines -gt 0) {
+              Write-Host "$($healthyCount.Lines) services are healthy"
+              break
+            } else {
+              Write-Host "Waiting for services to become healthy..."
+              Start-Sleep -Seconds 10
+            }
+          }
+          
+          if (((Get-Date) - $startTime).TotalSeconds -ge $timeout) {
+            Write-Host "Some services may not have health checks"
+          }
 
       # 8️⃣ Dọn dẹp Docker resources không sử dụng
       - name: Clean up unused Docker resources
         run: |
-          echo "🧹 Cleaning up unused Docker resources..."
+          Write-Host "Cleaning up unused Docker resources..."
           docker image prune -f
           docker container prune -f
-          echo "✅ Cleanup completed"
+          Write-Host "Cleanup completed"
 
       # 9️⃣ Thông báo deployment hoàn tất
       - name: Deployment summary
         run: |
-          echo "🎉 DEPLOYMENT COMPLETED SUCCESSFULLY!"
-          echo "======================================"
-          echo "📦 Services deployed:"
+          Write-Host "DEPLOYMENT COMPLETED SUCCESSFULLY!"
+          Write-Host "======================================"
+          Write-Host "Services deployed:"
           docker ps --format "• {{.Names}} ({{.Status}})"
-          echo "======================================"
+          Write-Host "======================================"
