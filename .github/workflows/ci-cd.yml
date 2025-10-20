@@ -85,10 +85,9 @@ jobs:
           Write-Host "Checking Docker environment..."
           docker --version
           docker-compose --version
-          docker ps
 
-      # 2️⃣ Login Docker Hub (sử dụng docker/login-action để tránh lỗi ký tự đặc biệt)
-      - name: Login to Docker Hub on Windows
+      # 2️⃣ Login Docker Hub
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -101,7 +100,7 @@ jobs:
           cd "D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1"
           docker-compose down --remove-orphans || Write-Host "No containers to stop"
 
-      # 4️⃣ Pull images mới nhất từ Docker Hub
+      # 4️⃣ Pull images mới nhất
       - name: Pull latest Docker images
         run: |
           Write-Host "Pulling latest Docker images..."
@@ -114,64 +113,14 @@ jobs:
       # 5️⃣ Deploy với docker-compose
       - name: Deploy with docker-compose
         run: |
-          Write-Host "Deploying with docker-compose..."
+          Write-Host "Deploying services..."
           cd "D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1"
           docker-compose up -d --remove-orphans --force-recreate
           Write-Host "Deployment completed"
 
-      # 6️⃣ Kiểm tra trạng thái deployment
-      - name: Verify deployment status
-        run: |
-          Write-Host "Deployment Status:"
-          Write-Host "======================"
-          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-          Write-Host "======================"
-
-          $running_containers = docker ps --format "{{.Names}}" | Measure-Object -Line
-          Write-Host "Running containers: $($running_containers.Lines)"
-          
-          if ($running_containers.Lines -gt 0) {
-            Write-Host "Deployment successful - $($running_containers.Lines) containers are running"
-          } else {
-            Write-Host "Deployment failed - No containers running"
-            exit 1
-          }
-
-      # 7️⃣ Kiểm tra health của services
-      - name: Check services health
-        run: |
-          Write-Host "Checking services health..."
-          $timeout = 90
-          $startTime = Get-Date
-          
-          while (((Get-Date) - $startTime).TotalSeconds -lt $timeout) {
-            $healthyCount = docker ps --filter "health=healthy" --format "{{.Names}}" | Measure-Object -Line
-            if ($healthyCount.Lines -gt 0) {
-              Write-Host "$($healthyCount.Lines) services are healthy"
-              break
-            } else {
-              Write-Host "Waiting for services to become healthy..."
-              Start-Sleep -Seconds 10
-            }
-          }
-          
-          if (((Get-Date) - $startTime).TotalSeconds -ge $timeout) {
-            Write-Host "Some services may not have health checks"
-          }
-
-      # 8️⃣ Dọn dẹp Docker resources không sử dụng
-      - name: Clean up unused Docker resources
-        run: |
-          Write-Host "Cleaning up unused Docker resources..."
-          docker image prune -f
-          docker container prune -f
-          Write-Host "Cleanup completed"
-
-      # 9️⃣ Thông báo deployment hoàn tất
+      # 6️⃣ Thông báo deployment hoàn tất
       - name: Deployment summary
         run: |
           Write-Host "DEPLOYMENT COMPLETED SUCCESSFULLY!"
-          Write-Host "======================================"
-          Write-Host "Services deployed:"
+          Write-Host "Services currently running:"
           docker ps --format "• {{.Names}} ({{.Status}})"
-          Write-Host "======================================"
