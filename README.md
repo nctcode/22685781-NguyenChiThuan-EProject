@@ -27,7 +27,7 @@ graph TB
 | `POST` | `/login` | 🔑 Đăng nhập hệ thống | ❌ |
 | `GET` | `/dashboard` | 📋 Truy cập vào trang chủ | ✅ |
 
-### 📦 Product Service (`:3001`)
+### 📦 Product Service
 
 | Method | Endpoint | Chức năng | Authentication |
 |--------|----------|-----------|----------------|
