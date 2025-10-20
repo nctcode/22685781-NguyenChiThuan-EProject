@@ -53,6 +53,8 @@ jobs:
     name: Deploy on Localhost (Windows Runner)
     needs: build-and-push
     runs-on: self-hosted
+    env:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
     steps:
       # 1️⃣ Kiểm tra Docker environment
       - name: Check Docker environment
@@ -86,6 +88,7 @@ jobs:
           docker pull %DOCKER_USERNAME%/auth:latest
           docker pull %DOCKER_USERNAME%/product:latest
           docker pull %DOCKER_USERNAME%/order:latest
+          echo All images pulled successfully
 
       # 5️⃣ Deploy với docker-compose
       - name: Deploy with docker-compose
@@ -102,4 +105,5 @@ jobs:
         run: |
           echo DEPLOYMENT COMPLETED SUCCESSFULLY!
           docker ps
+
 
