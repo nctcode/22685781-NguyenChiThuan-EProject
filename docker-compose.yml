@@ -13,7 +13,7 @@ services:
       AUTH_SERVICE_URL: http://auth:3000
       PRODUCT_SERVICE_URL: http://product:3001
       ORDER_SERVICE_URL: http://order:3002
-    depends_on:
+    depends_on: 
       - auth
       - product
       - order
