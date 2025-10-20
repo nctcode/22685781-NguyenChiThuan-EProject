@@ -156,8 +156,6 @@ docker-compose logs -f order
 ## Ảnh demo
 ### Đăng ký
 ![Register](auth/src/public/result/register.png)
-lưu vào Mongo
-![DB](auth/src/public/result/checkDBmongodb.png)
 
 ### Đăng nhập
 ![Login](auth/src/public/result/login.png)
