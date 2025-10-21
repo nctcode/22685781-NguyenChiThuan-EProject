@@ -248,12 +248,12 @@ jobs:
           docker-compose up -d --remove-orphans --force-recreate
           echo "✅ Services deployed"
 
-      - name: Wait for services to start
-        shell: cmd
-        run: |
-          echo "⏳ Waiting for services to start..."
-          timeout /t 30 /nobreak
-          echo "✅ Startup wait completed"
+      # - name: Wait for services to start
+      #   shell: cmd
+      #   run: |
+      #     echo "⏳ Waiting for services to start..."
+      #     timeout /t 30 /nobreak
+      #     echo "✅ Startup wait completed"
 
       - name: Verify deployment health
         shell: cmd
