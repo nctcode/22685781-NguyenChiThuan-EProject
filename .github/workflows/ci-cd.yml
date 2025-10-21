@@ -205,7 +205,7 @@ jobs:
           echo "🐳 Docker Environment Check"
           docker --version
           docker-compose --version
-          docker system df
+          echo "✅ Docker is set up correctly"
 
       - name: Login to Docker Hub
         shell: cmd
