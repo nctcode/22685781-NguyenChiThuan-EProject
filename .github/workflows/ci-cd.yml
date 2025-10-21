@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   # ==============================
-  # 1️⃣ TEST - SỬA LỖI PACKAGE-LOCK
+  # 1️⃣ TEST - SỬA LỖI DEPENDENCIES
   # ==============================
   test:
     name: 🧪 Run Tests
@@ -28,8 +28,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
 
       # Tạo .env files cho testing từ GitHub Secrets
       - name: Create .env files for testing
@@ -52,11 +50,30 @@ jobs:
           echo "MONGODB_PRODUCT_URI=${{ secrets.MONGODB_PRODUCT_URI }}" >> order/.env
           echo "MONGODB_ORDER_URI=${{ secrets.MONGODB_ORDER_URI }}" >> order/.env
 
-      # 🔧 SỬA LỖI: Dùng npm install thay vì npm ci
-      - name: Install all dependencies
+      # 🔧 CÀI ĐẶT DEPENDENCIES CHO TỪNG SERVICE TRƯỚC KHI TEST
+      - name: Install dependencies for auth service
+        run: |
+          cd auth
+          npm install
+          echo "✅ Auth dependencies installed"
+
+      - name: Install dependencies for product service
+        run: |
+          cd product
+          npm install
+          echo "✅ Product dependencies installed"
+
+      - name: Install dependencies for order service
+        run: |
+          cd order
+          npm install
+          echo "✅ Order dependencies installed"
+
+      # 🔧 CÀI ĐẶT TEST DEPENDENCIES TỪ ROOT
+      - name: Install test dependencies from root
         run: |
           npm install
-          echo "✅ All dependencies installed"
+          echo "✅ Test dependencies installed"
 
       # 🔧 CHẠY TEST TỪ ROOT
       - name: Run all tests
