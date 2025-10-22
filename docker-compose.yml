@@ -1,30 +1,31 @@
 version: '3.8'
 
 services:
-  api-gateway:
-    image: nct2903/api-gateway:latest 
-    build: ./api-gateway
-    container_name: api-gateway
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
     ports:
-      - "3003:3003"
-    environment:
-      PORT: 3003
-      JWT_SECRET: 12345
-      AUTH_SERVICE_URL: http://auth:3000
-      PRODUCT_SERVICE_URL: http://product:3001
-      ORDER_SERVICE_URL: http://order:3002
-    depends_on: 
-      - auth
-      - product
-      - order
+      - "27017:27017"
+    networks:
+        - ecommerce
+    volumes:
+      - mongo_data:/data/db
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes: 
+      - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/ 
+      - ~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq
+    networks:
+        - ecommerce
+    restart: unless-stopped
+    
   auth:
     image: nct2903/auth:latest
     build: ./auth
@@ -32,17 +33,27 @@ services:
     ports:
       - "3000:3000"
     env_file: ./auth/.env
-    environment:
-      MONGODB_URI: mongodb://mongodb:27017/auth-service
+    networks:
+      - ecommerce
     depends_on:
       - mongodb
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+
+  api-gateway:
+    image: nct2903/api-gateway:latest 
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "3003:3003"
+    environment:
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    networks:
+      - ecommerce
+    depends_on: 
+      - auth
+      - product
+      - order
+    restart: unless-stopped
 
   product:
     image: nct2903/product:latest
@@ -52,19 +63,14 @@ services:
       - "3001:3001"
     env_file: ./product/.env
     environment:
-      MONGODB_URI: mongodb://mongodb:27017/product-service
-      RABBITMQ_URI: amqp://guest:guest@rabbitmq:5672
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    networks:
+      - ecommerce
     depends_on:
       - mongodb
       - rabbitmq
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
+    
   order:
     image: nct2903/order:latest 
     build: ./order
@@ -72,53 +78,14 @@ services:
     ports:
       - "3002:3002"
     environment:
-      RABBITMQ_URI: amqp://guest:guest@rabbitmq:5672
-      MONGODB_ORDER_URI: mongodb://mongodb:27017/order-service
+      - RABBITMQ_URL=amqp://rabbitmq:5672
     env_file: ./order/.env
+    networks:
+      - ecommerce
     depends_on:
       - mongodb
       - rabbitmq
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    restart: unless-stopped
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    restart: unless-stopped
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-volumes:
-  mongo_data:
 
 networks:
-  default:
-    name: eproject-network
+  ecommerce:
