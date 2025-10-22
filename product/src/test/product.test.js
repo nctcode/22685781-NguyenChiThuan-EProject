@@ -26,7 +26,7 @@ describe("Products", () => {
 
             console.log("✅ Registered test user:", registerRes.status);
         } catch (err) {
-            console.log("ℹ️ Possibly already registered:", err.response ? .status);
+            console.log("ℹ️ Possibly already registered:", err.response && err.response.status);
         }
 
         // --- 🧩 2. Đăng nhập để lấy token ---
@@ -40,7 +40,6 @@ describe("Products", () => {
 
         console.log("🔑 Auth response:", authRes.status, authRes.body);
 
-        // --- 🧩 3. Kiểm tra token ---
         if (!authRes.body.token) {
             throw new Error("❌ No token received from Auth service. Check LOGIN_TEST_USER and LOGIN_TEST_PASSWORD!");
         }
@@ -48,7 +47,6 @@ describe("Products", () => {
         authToken = authRes.body.token;
         console.log("✅ Token received:", authToken);
 
-        // --- 🧩 4. Start Product service ---
         app.start();
     });
 
