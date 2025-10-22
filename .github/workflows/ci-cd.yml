@@ -2,178 +2,90 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  # ==============================
-  # 1️⃣ TEST - SỬA LỖI MONGODB & RABBITMQ
-  # ==============================
   test:
-    name: 🧪 Run Tests
     runs-on: ubuntu-latest
-    services:
-      mongodb:
-        image: mongo:latest
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd mongosh
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      rabbitmq:
-        image: rabbitmq:management
-        ports:
-          - 5672:5672
-          - 15672:15672
-        options: >-
-          --health-cmd "rabbitmq-diagnostics check_port_connectivity"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/checkout@v3.2.0
+      
+      - name: Cache node modules
+        uses: actions/cache@v3
         with:
-          node-version: '18'
-
-      # 🔧 SỬA LỖI: Tạo .env files với URI ĐÚNG cho testing
-      - name: Create .env files for testing
+          path: |
+            auth/node_modules
+            product/node_modules
+            node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      
+      - name: Setup test environment
         run: |
-          # Auth service - sử dụng localhost cho testing
-          echo "MONGODB_AUTH_URI=mongodb://localhost:27017/auth-service" > auth/.env
-          echo "JWT_SECRET=test-jwt-secret-123" >> auth/.env
-          echo "PORT=3001" >> auth/.env
+          echo "MONGODB_AUTH_URI=${{ secrets.MONGODB_TEST_URI }}" >> auth/.env
+          echo "JWT_SECRET=test_jwt_secret_ci" >> auth/.env
+          echo "JWT_SECRET=test_jwt_secret_ci" >> product/.env
+          echo "MONGODB_PRODUCT_URI=${{ secrets.MONGODB_TEST_URI }}" >> product/.env
+          echo "LOGIN_TEST_USER=${{ secrets.LOGIN_TEST_USER }}" >> product/.env
+          echo "LOGIN_TEST_PASSWORD=${{ secrets.LOGIN_TEST_PASSWORD }}" >> product/.env
 
-          # Product service - sử dụng localhost cho testing
-          echo "MONGODB_AUTH_URI=mongodb://localhost:27017/auth-service" > product/.env
-          echo "JWT_SECRET=test-jwt-secret-123" >> product/.env
-          echo "MONGODB_PRODUCT_URI=mongodb://localhost:27017/product-service" >> product/.env
-          echo "MONGODB_ORDER_URI=mongodb://localhost:27017/order-service" >> product/.env
-          echo "LOGIN_TEST_USER=test@example.com" >> product/.env
-          echo "LOGIN_TEST_PASSWORD=password123" >> product/.env
-          echo "PORT=3002" >> product/.env
-          echo "RABBITMQ_URL=amqp://localhost:5672" >> product/.env
-          echo "AUTH_SERVICE_URL=http://localhost:3001" >> product/.env
-
-          # Order service - sử dụng localhost cho testing
-          echo "MONGODB_AUTH_URI=mongodb://localhost:27017/auth-service" > order/.env
-          echo "JWT_SECRET=test-jwt-secret-123" >> order/.env
-          echo "MONGODB_PRODUCT_URI=mongodb://localhost:27017/product-service" >> order/.env
-          echo "MONGODB_ORDER_URI=mongodb://localhost:27017/order-service" >> order/.env
-          echo "PORT=3003" >> order/.env
-          echo "RABBITMQ_URL=amqp://localhost:5672" >> order/.env
-          echo "PRODUCT_SERVICE_URL=http://localhost:3002" >> order/.env
-
-      # Cài đặt dependencies cho từng service
-      - name: Install dependencies for auth service
+      - name: Install dependencies
         run: |
-          cd auth
-          npm install
-          echo "✅ Auth dependencies installed"
-
-      - name: Install dependencies for product service
-        run: |
-          cd product
-          npm install
-          echo "✅ Product dependencies installed"
-
-      - name: Install dependencies for order service
-        run: |
-          cd order
-          npm install
-          echo "✅ Order dependencies installed"
-
-      # Cài đặt test dependencies từ root
-      - name: Install test dependencies from root
-        run: |
-          npm install
-          echo "✅ Test dependencies installed"
-
-      # 🔧 SỬA LỖI: Chạy tests với timeout dài hơn và từng service riêng biệt
+          cd auth && npm ci
+          cd ../product && npm ci
+          cd .. && npm ci
+      
       - name: Run auth tests
         run: |
-          echo "🧪 Running auth tests..."
           cd auth
-          npx mocha --timeout 30000 src/test/**/*.test.js --exit || echo "Auth tests completed with status: $?"
-
+          npm test
+      
+      - name: Start auth service for integration tests
+        run: |
+          cd auth
+          npm start &
+          echo "Waiting for auth service..."
+          npx wait-on http://localhost:3001/health --timeout 30000
+      
       - name: Run product tests
         run: |
-          echo "🧪 Running product tests..."
           cd product
-          npx mocha --timeout 30000 src/test/**/*.test.js --exit || echo "Product tests completed with status: $?"
+          npm test
+      
+      - name: Cleanup
+        if: always()
+        run: pkill -f "node" || true
 
-      - name: Run order tests
-        run: |
-          echo "🧪 Running order tests..."
-          cd order
-          # Kiểm tra xem có test files không
-          if [ -d "src/test" ] && [ "$(find src/test -name '*.test.js' | head -1)" ]; then
-            npx mocha --timeout 30000 src/test/**/*.test.js --exit || echo "Order tests completed with status: $?"
-          else
-            echo "✅ No tests found for order service"
-          fi
-
-      - name: Test summary
-        run: |
-          echo "✅ All test steps completed!"
-
-  # ==============================
-  # 2️⃣ BUILD & PUSH DOCKER IMAGES
-  # ==============================
   build-and-push:
-    name: 🏗️ Build & Push Docker Images
+    name: Build & Push Docker Images
     needs: test
+    if: success() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
       matrix:
         service: [api-gateway, auth, product, order]
     steps:
+      # Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Setup Docker Buildx (BuildKit)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Login Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Tạo .env files cho Docker build (production)
-      - name: Create .env files for Docker services
-        run: |
-          # Auth service
-          echo "MONGODB_AUTH_URI=mongodb://mongodb:27017/auth-service" > auth/.env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> auth/.env
-          echo "PORT=3000" >> auth/.env
-          
-          # Product service  
-          echo "MONGODB_AUTH_URI=mongodb://mongodb:27017/auth-service" > product/.env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> product/.env
-          echo "MONGODB_PRODUCT_URI=mongodb://mongodb:27017/product-service" >> product/.env
-          echo "MONGODB_ORDER_URI=mongodb://mongodb:27017/order-service" >> product/.env
-          echo "PORT=3000" >> product/.env
-          echo "RABBITMQ_URL=amqp://rabbitmq:5672" >> product/.env
-          echo "AUTH_SERVICE_URL=http://auth:3000" >> product/.env
-          
-          # Order service
-          echo "MONGODB_AUTH_URI=mongodb://mongodb:27017/auth-service" > order/.env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> order/.env
-          echo "MONGODB_PRODUCT_URI=mongodb://mongodb:27017/product-service" >> order/.env
-          echo "MONGODB_ORDER_URI=mongodb://mongodb:27017/order-service" >> order/.env
-          echo "PORT=3000" >> order/.env
-          echo "RABBITMQ_URL=amqp://rabbitmq:5672" >> order/.env
-          echo "PRODUCT_SERVICE_URL=http://product:3000" >> order/.env
-
+      # Build & Push Docker image (song song nhờ matrix)
       - name: Build & push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
@@ -183,105 +95,67 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
+          platforms: linux/amd64,linux/arm64
 
   # ==============================
-  # 3️⃣ DEPLOY TO PRODUCTION
+  # 2️⃣ Deploy trên Windows Runner
   # ==============================
   deploy:
-    name: 🚀 Deploy to Production
+    name: Deploy on Localhost
     needs: build-and-push
+    if: success() && github.ref == 'refs/heads/main'
     runs-on: self-hosted
     env:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
     steps:
+      # 1️⃣ Kiểm tra Docker environment
       - name: Check Docker environment
         shell: cmd
         run: |
-          echo "🐳 Docker Environment Check"
+          echo Checking Docker environment...
           docker --version
           docker-compose --version
-          echo "✅ Docker is set up correctly"
 
+      # 2️⃣ Login Docker Hub
       - name: Login to Docker Hub
-        shell: cmd
-        run: |
-          echo "🔐 Logging into Docker Hub..."
-          docker login -u %DOCKER_USERNAME% -p %DOCKER_PASSWORD%
-          echo "✅ Docker Hub login successful"
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Create production .env file
+      # 3️⃣ Dừng và xóa containers cũ
+      - name: Stop and remove old containers
         shell: cmd
         run: |
-          echo "Creating production .env file..."
-          cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
-          echo JWT_SECRET=%JWT_SECRET% > .env
-          echo "✅ Production .env file created"
-
-      - name: Stop and cleanup old containers
-        shell: cmd
-        run: |
-          echo "🧹 Cleaning up old containers..."
+          echo Stopping old containers...
           cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
           docker-compose down --remove-orphans
-          echo "✅ Old containers cleaned up"
 
+      # 4️⃣ Pull images mới nhất
       - name: Pull latest Docker images
         shell: cmd
         run: |
-          echo "📥 Pulling latest images..."
+          echo Pulling latest Docker images...
           docker pull %DOCKER_USERNAME%/api-gateway:latest
           docker pull %DOCKER_USERNAME%/auth:latest
           docker pull %DOCKER_USERNAME%/product:latest
           docker pull %DOCKER_USERNAME%/order:latest
-          echo "✅ All images pulled successfully"
+          echo All images pulled successfully
 
-      - name: Deploy services with docker-compose
+      # 5️⃣ Deploy với docker-compose
+      - name: Deploy with docker-compose
         shell: cmd
         run: |
-          echo "🚀 Deploying services..."
+          echo Deploying services...
           cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
           docker-compose up -d --remove-orphans --force-recreate
-          echo "✅ Services deployed"
+          echo Deployment completed
 
-      # - name: Wait for services to start
-      #   shell: cmd
-      #   run: |
-      #     echo "⏳ Waiting for services to start..."
-      #     timeout /t 30 /nobreak
-      #     echo "✅ Startup wait completed"
-
-      - name: Verify deployment health
+      # 6️⃣ Thông báo deployment hoàn tất
+      - name: Deployment summary
         shell: cmd
         run: |
-          echo "🔍 Verifying deployment health..."
-          cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
-          echo "📊 Containers status:"
-          docker-compose ps
-          echo "🔧 Checking running containers:"
-          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-          echo "✅ Health check completed"
+          echo DEPLOYMENT COMPLETED SUCCESSFULLY!
+          docker ps
 
-      - name: Cleanup unused images
-        shell: cmd
-        run: |
-          echo "🧹 Cleaning up unused images..."
-          docker image prune -f
-          echo "✅ Unused images cleaned up"
 
-      - name: Deployment success summary
-        shell: cmd
-        run: |
-          echo.
-          echo "🎉 DEPLOYMENT COMPLETED SUCCESSFULLY!"
-          echo "📋 Services Summary:"
-          echo "   - 🔐 Auth Service: Ready"
-          echo "   - 📦 Product Service: Ready" 
-          echo "   - 🛒 Order Service: Ready"
-          echo "   - 🌐 API Gateway: Ready"
-          echo "🕐 Deployment Time: %date% %time%"
-          echo.
