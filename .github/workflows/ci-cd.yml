@@ -28,8 +28,8 @@ jobs:
       - name: Setup test environment
         run: |
           echo "MONGODB_AUTH_URI=${{ secrets.MONGODB_TEST_URI }}" >> auth/.env
-          echo "JWT_SECRET=test_jwt_secret_ci" >> auth/.env
-          echo "JWT_SECRET=test_jwt_secret_ci" >> product/.env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> auth/.env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> product/.env
           echo "MONGODB_PRODUCT_URI=${{ secrets.MONGODB_TEST_URI }}" >> product/.env
           echo "LOGIN_TEST_USER=${{ secrets.LOGIN_TEST_USER }}" >> product/.env
           echo "LOGIN_TEST_PASSWORD=${{ secrets.LOGIN_TEST_PASSWORD }}" >> product/.env
