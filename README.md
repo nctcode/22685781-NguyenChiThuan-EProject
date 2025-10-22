@@ -4,18 +4,7 @@
 
 ## 🏗️ Kiến trúc Hệ thống
 
-```mermaid
-graph TB
-    Client[📱 Client] --> API[🚪 API Gateway]
-    API --> Auth[🔐 Auth Service]
-    API --> Product[📦 Product Service]
-    API --> Order[📋 Order Service]
-    Product --> RabbitMQ[(🐇 RabbitMQ)]
-    Order --> RabbitMQ
-    Auth --> MongoDB[(🍃 MongoDB)]
-    Product --> MongoDB
-    Order --> MongoDB
-```
+<img width="1620" height="1166" alt="image" src="https://github.com/user-attachments/assets/d0ab2507-8328-45c3-b611-1c20f4f348fb" />
   
 ## 📡 API Endpoints
 
