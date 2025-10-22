@@ -29,6 +29,8 @@ describe("User Authentication", () => {
                 .post("/register")
                 .send({ username: "testuser1", password: "password1" });
 
+            console.log("Register response status:", res.status);
+            console.log("Register response body:", res.body);
             expect(res).to.have.status(200);
             expect(res.body).to.have.property("_id");
             expect(res.body).to.have.property("username", "testuser1");
