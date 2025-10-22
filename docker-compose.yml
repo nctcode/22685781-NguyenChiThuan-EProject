@@ -25,6 +25,12 @@ services:
     networks:
         - ecommerce
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     
   auth:
     image: nct2903/auth:latest
@@ -67,8 +73,10 @@ services:
     networks:
       - ecommerce
     depends_on:
-      - mongodb
-      - rabbitmq
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     restart: unless-stopped
     
   order:
@@ -83,8 +91,10 @@ services:
     networks:
       - ecommerce
     depends_on:
-      - mongodb
-      - rabbitmq
+      mongodb:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     restart: unless-stopped
 volumes:
   mongo_data:
