@@ -12,16 +12,43 @@ describe("Products", () => {
 
     before(async() => {
         app = new App();
-        await Promise.all([app.connectDB(), app.setupMessageBroker()])
+        await Promise.all([app.connectDB(), app.setupMessageBroker()]);
 
-        // Authenticate with the auth microservice to get a token
+        // --- 🧩 1. Đảm bảo Auth service đã có tài khoản test ---
+        try {
+            const registerRes = await chai
+                .request("http://localhost:3000")
+                .post("/register")
+                .send({
+                    username: process.env.LOGIN_TEST_USER,
+                    password: process.env.LOGIN_TEST_PASSWORD,
+                });
+
+            console.log("✅ Registered test user:", registerRes.status);
+        } catch (err) {
+            console.log("ℹ️ Possibly already registered:", err.response ? .status);
+        }
+
+        // --- 🧩 2. Đăng nhập để lấy token ---
         const authRes = await chai
             .request("http://localhost:3000")
             .post("/login")
-            .send({ username: process.env.LOGIN_TEST_USER, password: process.env.LOGIN_TEST_PASSWORD });
+            .send({
+                username: process.env.LOGIN_TEST_USER,
+                password: process.env.LOGIN_TEST_PASSWORD,
+            });
+
+        console.log("🔑 Auth response:", authRes.status, authRes.body);
+
+        // --- 🧩 3. Kiểm tra token ---
+        if (!authRes.body.token) {
+            throw new Error("❌ No token received from Auth service. Check LOGIN_TEST_USER and LOGIN_TEST_PASSWORD!");
+        }
 
         authToken = authRes.body.token;
-        console.log(authToken);
+        console.log("✅ Token received:", authToken);
+
+        // --- 🧩 4. Start Product service ---
         app.start();
     });
 
