@@ -86,6 +86,7 @@ services:
       - mongodb
       - rabbitmq
     restart: unless-stopped
-
+volumes:
+  mongo_data:
 networks:
   ecommerce:
