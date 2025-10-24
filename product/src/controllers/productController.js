@@ -25,24 +25,20 @@ class ProductController {
                 return res.status(401).json({ message: "Unauthorized" });
             }
             // const product = new Product(req.body);
+            const product = await this.productService.createProduct(req.body);
 
             // const validationError = product.validateSync();
             // if (validationError) {
             //     return res.status(400).json({ message: validationError.message });
             // }
-
             // await product.save({ timeout: 30000 });
-
             // res.status(201).json(product);
-            const product = await this.productService.createProduct(req.body);
             res.status(201).json(product);
         } catch (error) {
-            console.error("❌ Error in createProduct:", error); // 👈 in rõ ra console
-            res.status(500).json({
-                message: "Server error",
-                error: error.message, // 👈 gửi lỗi thật về Postman
-                stack: error.stack // 👈 (tạm thời thêm) giúp debug dễ
-            });
+            if (error.name === "ValidationError") {
+                return res.status(400).json({ message: error.message });
+            }
+            res.status(500).json({ message: "Server error" });
         }
     }
 
