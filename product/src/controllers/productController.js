@@ -11,7 +11,6 @@ class ProductController {
         this.productService = new ProductsService();
         this.createOrder = this.createOrder.bind(this);
         this.getOrderStatus = this.getOrderStatus.bind(this);
-        this.getProductById = this.getProductById.bind(this);
         this.createProduct = this.createProduct.bind(this);
         this.getProducts = this.getProducts.bind(this);
         this.ordersMap = new Map();
