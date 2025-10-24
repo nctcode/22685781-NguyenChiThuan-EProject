@@ -1,4 +1,4 @@
-const ProductsRepository = require(".repositories/productsRepository");
+const ProductsRepository = require("../repositories/productsRepository");
 
 /**
  * Class that ties together the business logic and the data access layer
@@ -22,6 +22,13 @@ class ProductsService {
         const products = await this.productsRepository.findAll();
         return products;
     }
+
+    async getProductsByIds(ids) {
+        const products = await this.productsRepository.findManyByIds(ids);
+        return products;
+    }
+
+
 }
 
 module.exports = ProductsService;

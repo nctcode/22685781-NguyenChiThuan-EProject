@@ -1,4 +1,5 @@
-const Product = require("../models/product");
+// const Product = require("../models/product");
+const ProductsService = require("../services/productsService");
 const messageBroker = require("../utils/messageBroker");
 const uuid = require('uuid');
 /**
@@ -7,8 +8,12 @@ const uuid = require('uuid');
 class ProductController {
 
     constructor() {
+        this.productService = new ProductsService();
         this.createOrder = this.createOrder.bind(this);
         this.getOrderStatus = this.getOrderStatus.bind(this);
+        this.getProductById = this.getProductById.bind(this);
+        this.createProduct = this.createProduct.bind(this);
+        this.getProducts = this.getProducts.bind(this);
         this.ordersMap = new Map();
 
     }
@@ -19,19 +24,25 @@ class ProductController {
             if (!token) {
                 return res.status(401).json({ message: "Unauthorized" });
             }
-            const product = new Product(req.body);
+            // const product = new Product(req.body);
 
-            const validationError = product.validateSync();
-            if (validationError) {
-                return res.status(400).json({ message: validationError.message });
-            }
+            // const validationError = product.validateSync();
+            // if (validationError) {
+            //     return res.status(400).json({ message: validationError.message });
+            // }
 
-            await product.save({ timeout: 30000 });
+            // await product.save({ timeout: 30000 });
 
+            // res.status(201).json(product);
+            const product = await this.productService.createProduct(req.body);
             res.status(201).json(product);
         } catch (error) {
-            console.error(error);
-            res.status(500).json({ message: "Server error" });
+            console.error("❌ Error in createProduct:", error); // 👈 in rõ ra console
+            res.status(500).json({
+                message: "Server error",
+                error: error.message, // 👈 gửi lỗi thật về Postman
+                stack: error.stack // 👈 (tạm thời thêm) giúp debug dễ
+            });
         }
     }
 
@@ -43,7 +54,8 @@ class ProductController {
             }
 
             const { ids } = req.body;
-            const products = await Product.find({ _id: { $in: ids } });
+            // const products = await Product.find({ _id: { $in: ids } });
+            const products = await this.productService.getProductsByIds(ids);
 
             const orderId = uuid.v4(); // Generate a unique order ID
             this.ordersMap.set(orderId, {
@@ -92,20 +104,49 @@ class ProductController {
         }
         return res.status(200).json(order);
     }
+
     async getProducts(req, res, next) {
         try {
             const token = req.headers.authorization;
             if (!token) {
                 return res.status(401).json({ message: "Unauthorized" });
             }
-            const products = await Product.find({});
+            // const products = await Product.find({});
 
+            // res.status(200).json(products);
+            const products = await this.productService.getProducts();
             res.status(200).json(products);
         } catch (error) {
             console.error(error);
             res.status(500).json({ message: "Server error" });
         }
     }
+
+    async getProductById(req, res, next) {
+        try {
+            const token = req.headers.authorization;
+            if (!token) {
+                return res.status(401).json({ message: "Unauthorized" });
+            }
+
+            const productId = req.params.id;
+            const productService = require("../services/productsService");
+            const service = new productService();
+
+            const product = await service.getProductById(productId);
+
+            if (!product) {
+                return res.status(404).json({ message: "Product not found" });
+            }
+
+            res.status(200).json(product);
+        } catch (error) {
+            console.error("Error in getProductById:", error); // 👈 thêm dòng này
+            res.status(500).json({ message: "Server error", error: error.message });
+        }
+    }
+
+
 }
 
 module.exports = ProductController;

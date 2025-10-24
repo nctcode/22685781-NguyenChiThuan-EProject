@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on: [push, pull_request]
 
 jobs:
-  test:
+  Test:
     runs-on: ubuntu-latest
 
     services:
@@ -79,8 +79,8 @@ jobs:
         run: pkill -f "node" || true
 
   build-and-push:
-    name: Build & Push Docker Images
-    needs: test
+    name: Build & Push
+    needs: Test
     if: success() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
@@ -118,7 +118,7 @@ jobs:
   # 2️⃣ Deploy trên Windows Runner
   # ==============================
   deploy:
-    name: Deploy on Localhost
+    name: Deploy
     needs: build-and-push
     if: success() && github.ref == 'refs/heads/main'
     runs-on: self-hosted
