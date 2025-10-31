@@ -9,5 +9,5 @@ router.post("/", isAuthenticated, productController.createProduct);
 router.post("/buy", isAuthenticated, productController.createOrder);
 router.get("/", isAuthenticated, productController.getProducts);
 router.get("/checkorder/:orderId", isAuthenticated, productController.getOrderStatus);
-
+router.get("/:id", isAuthenticated, productController.getspbyid);
 module.exports = router;

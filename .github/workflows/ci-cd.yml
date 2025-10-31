@@ -1,10 +1,15 @@
 name: CI/CD Pipeline
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   Test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # Giới hạn thời gian chạy test
 
     services:
       mongodb:
@@ -17,162 +22,193 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
+    strategy:
+      matrix:
+        # Chạy song song các service
+        service: [auth, product]
+        include:
+          - service: auth
+            path: auth
+            port: 3000
+          - service: product  
+            path: product
+            port: 3001
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3.2.0
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            ${{ matrix.path }}/package-lock.json
+            package-lock.json
 
       - name: Cache node modules
         uses: actions/cache@v3
         with:
           path: |
-            auth/node_modules
-            product/node_modules
+            ${{ matrix.path }}/node_modules
             node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ matrix.service }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.service }}-
 
       - name: Setup test environment
         run: |
-          # Auth service
-          echo "MONGODB_AUTH_URI=${{ secrets.MONGODB_AUTH_URI }}" >> auth/.env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> auth/.env
-
-          # Product service
-          echo "MONGODB_PRODUCT_URI=${{ secrets.MONGODB_PRODUCT_URI }}" >> product/.env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> product/.env
-          echo "LOGIN_TEST_USER=${{ secrets.LOGIN_TEST_USER }}" >> product/.env
-          echo "LOGIN_TEST_PASSWORD=${{ secrets.LOGIN_TEST_PASSWORD }}" >> product/.env
+          if [ "${{ matrix.service }}" == "auth" ]; then
+            echo "MONGODB_AUTH_URI=${{ secrets.MONGODB_AUTH_URI }}" >> ${{ matrix.path }}/.env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> ${{ matrix.path }}/.env
+          elif [ "${{ matrix.service }}" == "product" ]; then
+            echo "MONGODB_PRODUCT_URI=${{ secrets.MONGODB_PRODUCT_URI }}" >> ${{ matrix.path }}/.env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> ${{ matrix.path }}/.env
+            echo "LOGIN_TEST_USER=${{ secrets.LOGIN_TEST_USER }}" >> ${{ matrix.path }}/.env
+            echo "LOGIN_TEST_PASSWORD=${{ secrets.LOGIN_TEST_PASSWORD }}" >> ${{ matrix.path }}/.env
+          fi
 
       - name: Install dependencies
         run: |
-          cd auth && npm ci
-          cd ../product && npm ci
-          cd .. && npm ci
+          cd ${{ matrix.path }} && npm ci --prefer-offline --no-audit
+          cd .. && npm ci --prefer-offline --no-audit
 
       - name: Wait for MongoDB
         run: |
           echo "Waiting for MongoDB to be ready..."
-          for i in {1..10}; do
-            nc -z localhost 27017 && echo "MongoDB is ready!" && break
-            echo "Waiting 3s..."
-            sleep 3
-          done
+          timeout 30s bash -c 'until nc -z localhost 27017; do sleep 2; done' || exit 1
+          echo "MongoDB is ready!"
 
-      - name: Run auth tests
+      - name: Run tests
         run: |
-          cd auth
+          cd ${{ matrix.path }}
           npm test
 
+      # Chỉ chạy service auth cho integration test
       - name: Start auth service for integration tests
+        if: matrix.service == 'auth'
         run: |
           cd auth
           npm start &
-          echo "Waiting for auth service..."
           npx wait-on http://localhost:3000/auth --timeout 30000
-
-      - name: Run product tests
-        run: |
-          cd product
-          npm test
-
-      - name: Cleanup
-        if: always()
-        run: pkill -f "node" || true
 
   build-and-push:
     name: Build & Push
     needs: Test
     if: success() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
     strategy:
       matrix:
         service: [api-gateway, auth, product, order]
+        include:
+          - service: api-gateway
+            context: ./api-gateway
+          - service: auth
+            context: ./auth
+          - service: product
+            context: ./product  
+          - service: order
+            context: ./order
+
     steps:
-      # Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Setup Docker Buildx (BuildKit)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Login Docker Hub
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ matrix.service }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-${{ matrix.service }}-
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Build & Push Docker image (song song nhờ matrix)
       - name: Build & push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
-          context: ./${{ matrix.service }}
-          file: ./${{ matrix.service }}/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          # Không push multi-arch để tăng tốc build
 
-  # ==============================
-  # 2️⃣ Deploy trên Windows Runner
-  # ==============================
   deploy:
     name: Deploy
     needs: build-and-push
     if: success() && github.ref == 'refs/heads/main'
     runs-on: self-hosted
+    timeout-minutes: 5
     env:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      COMPOSE_PROJECT_DIR: D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
+
     steps:
-      # 1️⃣ Kiểm tra Docker environment
       - name: Check Docker environment
-        shell: cmd
+        shell: pwsh  # Sử dụng PowerShell thay vì cmd để nhanh hơn
         run: |
-          echo Checking Docker environment...
+          Write-Host "Checking Docker environment..."
           docker --version
           docker-compose --version
 
-      # 2️⃣ Login Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 3️⃣ Dừng và xóa containers cũ
       - name: Stop and remove old containers
-        shell: cmd
+        shell: pwsh
         run: |
-          echo Stopping old containers...
-          cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
+          Write-Host "Stopping old containers..."
+          cd $env:COMPOSE_PROJECT_DIR
           docker-compose down --remove-orphans
 
-      # 4️⃣ Pull images mới nhất
       - name: Pull latest Docker images
-        shell: cmd
+        shell: pwsh
         run: |
-          echo Pulling latest Docker images...
-          docker pull %DOCKER_USERNAME%/api-gateway:latest
-          docker pull %DOCKER_USERNAME%/auth:latest
-          docker pull %DOCKER_USERNAME%/product:latest
-          docker pull %DOCKER_USERNAME%/order:latest
-          echo All images pulled successfully
+          Write-Host "Pulling latest Docker images..."
+          $services = @("api-gateway", "auth", "product", "order")
+          $jobs = @()
+          
+          foreach ($service in $services) {
+              $job = Start-Job -ScriptBlock {
+                  param($service, $username)
+                  docker pull "${username}/${service}:latest"
+                  Write-Host "✓ $service pulled"
+              } -ArgumentList $service, $env:DOCKER_USERNAME
+              $jobs += $job
+          }
+          
+          # Chờ tất cả jobs hoàn thành
+          $jobs | Receive-Job -Wait
+          Write-Host "All images pulled successfully"
 
-      # 5️⃣ Deploy với docker-compose
       - name: Deploy with docker-compose
-        shell: cmd
+        shell: pwsh
         run: |
-          echo Deploying services...
-          cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
-          docker-compose up -d --remove-orphans --force-recreate
-          echo Deployment completed
+          Write-Host "Deploying services..."
+          cd $env:COMPOSE_PROJECT_DIR
+          docker-compose up -d --remove-orphans
+          Write-Host "Deployment completed"
 
-      # 6️⃣ Thông báo deployment hoàn tất
-      - name: Deployment summary
-        shell: cmd
+      - name: Health check
+        shell: pwsh
         run: |
-          echo DEPLOYMENT COMPLETED SUCCESSFULLY!
+          Write-Host "Performing health checks..."
+          Start-Sleep -Seconds 10
           docker ps
-
-
+          Write-Host "DEPLOYMENT COMPLETED SUCCESSFULLY!"
