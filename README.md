@@ -1,4 +1,17 @@
-﻿# 🛒 Dự án E-Commerce Microservices
+## 🧾 Giới thiệu
+
+| Thông tin | Chi tiết |
+|------------|-----------|
+| **Trường** | Đại học Công nghiệp Thành phố Hồ Chí Minh |
+| **Môn học** | Lập trình hướng dịch vụ |
+| **Giảng viên hướng dẫn** | Mr. Huynh Nam |
+| **Họ và tên** | Nguyễn Chí Thuận |
+| **MSSV** | 22685781 |
+
+---
+📚 *Báo cáo môn Lập trình hướng dịch vụ – Trình bày và triển khai hệ thống Microservices với API Gateway và RabbitMQ.*
+
+ # 🛒 Dự án E-Commerce Microservices
 
 > *Hệ thống backend thương mại điện tử hiện đại với kiến trúc microservices*
 
