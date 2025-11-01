@@ -13,7 +13,7 @@ class ProductController {
         this.getOrderStatus = this.getOrderStatus.bind(this);
         this.createProduct = this.createProduct.bind(this);
         this.getProducts = this.getProducts.bind(this);
-        // this.getspbyid = this.getspbyid.bind(this);
+        this.getspbyid = this.getspbyid.bind(this);
         this.ordersMap = new Map();
 
     }
@@ -93,19 +93,28 @@ class ProductController {
     }
 
     async getProducts(req, res, next) {
-            try {
-                const token = req.headers.authorization;
-                if (!token) {
-                    return res.status(401).json({ message: "Unauthorized" });
-                }
-                const products = await this.productService.getProducts();
-                res.status(200).json(products);
-            } catch (error) {
-                console.error(error);
-                res.status(500).json({ message: "Server error" });
+        try {
+            const token = req.headers.authorization;
+            if (!token) {
+                return res.status(401).json({ message: "Unauthorized" });
             }
+            const products = await this.productService.getProducts();
+            res.status(200).json(products);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "Server error" });
         }
-        // getspbyid
+    }
+    async getspbyid(req, res) {
+        try {
+            const products = await this.productService.getProductById(req.params.id);
+            res.status(200).json(products);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "fail" });
+        }
+    }
+
 
 }
 module.exports = ProductController;

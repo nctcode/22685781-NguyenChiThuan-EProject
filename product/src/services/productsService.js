@@ -23,10 +23,10 @@ class ProductsService {
         return products;
     }
 
-    // async getProductsByIds(ids) {
-    //     const products = await this.productsRepository.findManyByIds(ids);
-    //     return products;
-    // }
+    async getProductsByIds(ids) {
+        const products = await this.productsRepository.findManyByIds(ids);
+        return products;
+    }
 
 
 }
