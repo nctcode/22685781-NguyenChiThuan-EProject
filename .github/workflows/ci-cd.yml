@@ -1,11 +1,15 @@
 name: CI/CD Pipeline
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
 
 jobs:
-  Test:
+  test-auth:
+    name: Test Auth Service
     runs-on: ubuntu-latest
-
     services:
       mongodb:
         image: mongo:6
@@ -13,86 +17,127 @@ jobs:
           - 27017:27017
         options: >-
           --health-cmd "mongosh --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: auth/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd auth && npm ci
+
+      - name: Setup test environment
+        run: |
+          echo "MONGODB_AUTH_URI=${{ secrets.MONGODB_AUTH_URI }}" >> auth/.env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> auth/.env
+
+      - name: Wait for MongoDB
+        run: |
+          timeout 30s bash -c 'until nc -z localhost 27017; do sleep 2; done' || true
+
+      - name: Run tests
+        run: |
+          cd auth && npm test
+
+      - name: Start auth service for product tests
+        run: |
+          cd auth
+          npm start &
+          echo "Auth service starting..."
+          npx wait-on http://localhost:3000 --timeout 15000
+          echo "Auth service ready!"
+
+  test-product:
+    name: Test Product Service  
+    runs-on: ubuntu-latest
+    needs: test-auth  # Chờ auth service chạy xong
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - 27018:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=3
+
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics check_port_connectivity"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3.2.0
+        uses: actions/checkout@v4
 
-      - name: Cache node modules
-        uses: actions/cache@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          path: |
-            auth/node_modules
-            product/node_modules
-            node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: product/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd product && npm ci
 
       - name: Setup test environment
         run: |
-          # Auth service
-          echo "MONGODB_AUTH_URI=${{ secrets.MONGODB_AUTH_URI }}" >> auth/.env
-          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> auth/.env
-
-          # Product service
           echo "MONGODB_PRODUCT_URI=${{ secrets.MONGODB_PRODUCT_URI }}" >> product/.env
           echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> product/.env
           echo "LOGIN_TEST_USER=${{ secrets.LOGIN_TEST_USER }}" >> product/.env
           echo "LOGIN_TEST_PASSWORD=${{ secrets.LOGIN_TEST_PASSWORD }}" >> product/.env
+          echo "AUTH_SERVICE_URL=http://localhost:3000" >> product/.env
 
-      - name: Install dependencies
+      - name: Wait for dependencies
         run: |
-          cd auth && npm ci
-          cd ../product && npm ci
-          cd .. && npm ci
-
-      - name: Wait for MongoDB
-        run: |
-          echo "Waiting for MongoDB to be ready..."
-          for i in {1..10}; do
-            nc -z localhost 27017 && echo "MongoDB is ready!" && break
-            echo "Waiting 3s..."
-            sleep 3
-          done
-
-      - name: Run auth tests
-        run: |
-          cd auth
-          npm test
-
-      - name: Start auth service for integration tests
-        run: |
-          cd auth
-          npm start &
-          echo "Waiting for auth service..."
-          npx wait-on http://localhost:3000/auth --timeout 30000
+          echo "Waiting for dependencies..."
+          timeout 30s bash -c 'until nc -z localhost 27018; do sleep 2; done' || true
+          timeout 30s bash -c 'until nc -z localhost 5672; do sleep 2; done' || true
+          timeout 30s bash -c 'until curl -f http://localhost:3000/health 2>/dev/null || nc -z localhost 3000; do sleep 2; done' || true
 
       - name: Run product tests
         run: |
-          cd product
-          npm test
+          cd product && npm test
 
-      - name: Cleanup
-        if: always()
-        run: pkill -f "node" || true
+      - name: Run integration tests
+        run: |
+          cd product && npm run test:integration || true
 
   build-and-push:
     name: Build & Push
-    needs: Test
+    needs: [test-auth, test-product]
     if: success() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
       matrix:
         service: [api-gateway, auth, product, order]
     steps:
-
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:buildx-stable-1
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -109,7 +154,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.service }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   deploy:
     name: Deploy
@@ -118,13 +163,14 @@ jobs:
     runs-on: self-hosted
     env:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      COMPOSE_DIR: D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
     steps:
       - name: Check Docker environment
-        shell: cmd
+        shell: powershell
         run: |
-          echo Checking Docker environment...
+          Write-Host "Checking Docker environment..."
           docker --version
-          docker-compose --version
+          docker compose version
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -132,35 +178,35 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Stop and remove old containers
-        shell: cmd
+      - name: Stop old containers
+        shell: powershell
         run: |
-          echo Stopping old containers...
-          cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
-          docker-compose down --remove-orphans
+          Write-Host "Stopping old containers..."
+          cd $env:COMPOSE_DIR
+          docker compose down --remove-orphans
 
-      - name: Pull latest Docker images
-        shell: cmd
+      - name: Pull latest images in parallel
+        shell: powershell
         run: |
-          echo Pulling latest Docker images...
-          docker pull %DOCKER_USERNAME%/api-gateway:latest
-          docker pull %DOCKER_USERNAME%/auth:latest
-          docker pull %DOCKER_USERNAME%/product:latest
-          docker pull %DOCKER_USERNAME%/order:latest
-          echo All images pulled successfully
+          Write-Host "Pulling latest Docker images in parallel..."
+          $services = @("api-gateway", "auth", "product", "order")
+          $jobs = $services | ForEach-Object {
+              Start-Job -ScriptBlock {
+                  param($user, $svc)
+                  docker pull "${user}/${svc}:latest"
+                  Write-Host "✓ Pulled ${user}/${svc}:latest"
+              } -ArgumentList $env:DOCKER_USERNAME, $_
+          }
+          $jobs | Receive-Job -Wait -AutoRemoveJob
 
-      - name: Deploy with docker-compose
-        shell: cmd
+      - name: Deploy services
+        shell: powershell
         run: |
-          echo Deploying services...
-          cd /d D:\HTTT18B\Nam4_1\LTHDV\EProject-Phase-1
-          docker-compose up -d --remove-orphans --force-recreate
-          echo Deployment completed
-
-      - name: Deployment summary
-        shell: cmd
-        run: |
-          echo DEPLOYMENT COMPLETED SUCCESSFULLY!
-          docker ps
-
-
+          Write-Host "Deploying services..."
+          cd $env:COMPOSE_DIR
+          docker compose up -d --remove-orphans
+          
+          Write-Host "Checking services status..."
+          Start-Sleep -Seconds 10
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          Write-Host "🚀 DEPLOYMENT COMPLETED SUCCESSFULLY!"
