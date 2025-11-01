@@ -93,19 +93,19 @@ class ProductController {
     }
 
     async getProducts(req, res, next) {
-        try {
-            const token = req.headers.authorization;
-            if (!token) {
-                return res.status(401).json({ message: "Unauthorized" });
+            try {
+                const token = req.headers.authorization;
+                if (!token) {
+                    return res.status(401).json({ message: "Unauthorized" });
+                }
+                const products = await this.productService.getProducts();
+                res.status(200).json(products);
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({ message: "Server error" });
             }
-            const products = await this.productService.getProducts();
-            res.status(200).json(products);
-        } catch (error) {
-            console.error(error);
-            res.status(500).json({ message: "Server error" });
         }
-    }
-
+        // getspbyid
 
 }
 module.exports = ProductController;
