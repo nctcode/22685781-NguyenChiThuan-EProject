@@ -25,15 +25,7 @@ class ProductController {
             if (!token) {
                 return res.status(401).json({ message: "Unauthorized" });
             }
-            // const product = new Product(req.body);
             const product = await this.productService.createProduct(req.body);
-
-            // const validationError = product.validateSync();
-            // if (validationError) {
-            //     return res.status(400).json({ message: validationError.message });
-            // }
-            // await product.save({ timeout: 30000 });
-            // res.status(201).json(product);
             res.status(201).json(product);
         } catch (error) {
             if (error.name === "ValidationError") {
@@ -108,9 +100,6 @@ class ProductController {
             if (!token) {
                 return res.status(401).json({ message: "Unauthorized" });
             }
-            // const products = await Product.find({});
-
-            // res.status(200).json(products);
             const products = await this.productService.getProducts();
             res.status(200).json(products);
         } catch (error) {
@@ -124,11 +113,10 @@ class ProductController {
             const products = await this.productService.getProductById(req.params.id);
             res.status(200).json(products);
         } catch (error) {
-            consolde.error(error);
-            res.status(500).json({ message: "Server error" });
+            console.error(error);
+            res.status(500).json({ message: "fail" });
         }
     }
-
 
 }
 module.exports = ProductController;
