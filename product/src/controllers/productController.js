@@ -13,7 +13,7 @@ class ProductController {
         this.getOrderStatus = this.getOrderStatus.bind(this);
         this.createProduct = this.createProduct.bind(this);
         this.getProducts = this.getProducts.bind(this);
-        this.getspbyid = this.getspbyid.bind(this);
+        // this.getspbyid = this.getspbyid.bind(this);
         this.ordersMap = new Map();
 
     }
@@ -42,7 +42,6 @@ class ProductController {
             }
 
             const { ids } = req.body;
-            // const products = await Product.find({ _id: { $in: ids } });
             const products = await this.productService.getProductsByIds(ids);
 
             const orderId = uuid.v4(); // Generate a unique order ID
